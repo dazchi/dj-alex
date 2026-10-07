@@ -1,0 +1,17 @@
+services:
+  dj-alex:
+    build: .
+    image: dj-alex:latest
+    container_name: dj-alex
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Paths inside the container — mount your folders below instead of changing these.
+      MUSIC_DIR: /music
+      DATA_DIR: /data
+      HTTP_PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./music:/music:ro   # ← change ./music to your music folder on the host
+      - ./data:/data

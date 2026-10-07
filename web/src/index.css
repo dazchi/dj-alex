@@ -1,0 +1,80 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-ink-950: #07070c;
+  --color-ink-900: #0c0c14;
+  --color-ink-850: #11111b;
+  --color-ink-800: #161622;
+  --color-ink-700: #20202f;
+  --color-accent: #a78bfa;
+  --color-accent-strong: #8b5cf6;
+  --color-pink: #ec4899;
+  --animate-eq: eq 1s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-pop: pop 0.18s ease-out;
+
+  @keyframes eq {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.96) translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink-950);
+  color: #f4f4f5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.12) transparent;
+}
+
+::selection {
+  background: rgb(139 92 246 / 0.4);
+}
+
+@utility glass {
+  background: rgb(255 255 255 / 0.035);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+@utility text-gradient {
+  background: linear-gradient(90deg, #c4b5fd, #f0abfc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility bg-brand {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+}
+
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-ink-950), 0 0 0 4px rgb(167 139 250 / 0.8);
+  }
+}

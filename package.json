@@ -1,0 +1,16 @@
+{
+  "name": "dj-alex",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Discord music bot with a shared, real-time web UI",
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c magenta,cyan \"npm:dev -w server\" \"npm:dev -w web\"",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm start -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  }
+}
