@@ -188,9 +188,9 @@ export class Auth {
       return session.user;
     });
 
-    // Everything else under /api requires a session.
+    // Everything else under /api requires a session. The control API checks its own token (control.ts).
     app.addHook('onRequest', async (req, reply) => {
-      if (!req.url.startsWith('/api/') || req.url.startsWith('/api/me')) return;
+      if (!req.url.startsWith('/api/') || req.url.startsWith('/api/me') || req.url.startsWith('/api/control/')) return;
       if (!this.userFromCookie(req.headers.cookie)) return reply.code(401).send({ error: 'Not logged in' });
     });
   }

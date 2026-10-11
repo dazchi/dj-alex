@@ -7,6 +7,7 @@ import type { Config } from './config.js';
 import type { Controller } from './controller.js';
 import type { AckResult, Actor, ClientActions, InsertPosition, RepeatMode, SongSort, WebUser } from './types.js';
 import type { Auth } from './auth.js';
+import { registerControl } from './control.js';
 import { errorMessage, log } from './util.js';
 
 const POSITIONS: InsertPosition[] = ['end', 'next', 'now'];
@@ -21,6 +22,7 @@ export async function startWeb(config: Config, controller: Controller, auth: Aut
   const app = Fastify({ logger: false, trustProxy: true });
   const lib = controller.library;
   auth.register(app);
+  if (config.controlToken) registerControl(app, controller, config.controlToken);
 
   // ---------------------------------------------------------------- REST (read-only library access)
 

@@ -14,6 +14,9 @@ import type { InsertPosition, PlaybackStatus, QueueItem, RepeatMode } from './ty
 import { clamp, log, randomId, shuffleInPlace } from './util.js';
 
 const HISTORY_LIMIT = 50;
+const FADE_STEP_MS = 25;
+const DUCK_FADE_MS = 250;
+const UNDUCK_FADE_MS = 800;
 
 interface ResourceMeta {
   gen: number;
@@ -43,6 +46,11 @@ export class Player extends EventEmitter {
   private seekOffset = 0;
   private resource: AudioResource<ResourceMeta> | null = null;
   private ffmpeg: ChildProcess | null = null;
+  /** Temporary gain on top of the volume while someone else talks (1 = not ducked). */
+  private duckGain = 1;
+  private duckTarget = 1;
+  private fadeTimer: NodeJS.Timeout | null = null;
+  private duckTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly library: Library,
@@ -246,8 +254,45 @@ export class Player extends EventEmitter {
 
   setVolume(volume: number) {
     this.volume = clamp(Math.round(volume), 0, 100);
-    this.resource?.volume?.setVolumeLogarithmic(this.volume / 100);
+    this.applyGain();
     this.changed();
+  }
+
+  get ducked() {
+    return this.duckTarget < 1;
+  }
+
+  /**
+   * Fades the music to `level` (0..1) of its volume, for example while a voice assistant speaks, and back
+   * up after `seconds` unless renewed. `level` 1 or `seconds` 0 fades it back up now. The volume setting
+   * itself does not change.
+   */
+  duck(level: number, seconds: number) {
+    if (this.duckTimer) clearTimeout(this.duckTimer);
+    this.duckTimer = null;
+    const release = level >= 1 || seconds <= 0;
+    if (!release) this.duckTimer = setTimeout(() => this.duck(1, 0), seconds * 1000);
+    this.fadeTo(release ? 1 : clamp(level, 0, 1), release ? UNDUCK_FADE_MS : DUCK_FADE_MS);
+  }
+
+  private fadeTo(target: number, ms: number) {
+    if (target === this.duckTarget) return;
+    this.duckTarget = target;
+    if (this.fadeTimer) clearInterval(this.fadeTimer);
+    const step = ((target - this.duckGain) * FADE_STEP_MS) / ms;
+    this.fadeTimer = setInterval(() => {
+      const next = this.duckGain + step;
+      this.duckGain = (step < 0 ? next <= target : next >= target) ? target : next;
+      this.applyGain();
+      if (this.duckGain === target && this.fadeTimer) {
+        clearInterval(this.fadeTimer);
+        this.fadeTimer = null;
+      }
+    }, FADE_STEP_MS);
+  }
+
+  private applyGain() {
+    this.resource?.volume?.setVolumeLogarithmic((this.volume / 100) * this.duckGain);
   }
 
   setRepeat(mode: RepeatMode) {
@@ -344,8 +389,8 @@ export class Player extends EventEmitter {
       inlineVolume: true,
       metadata: { gen },
     });
-    resource.volume?.setVolumeLogarithmic(this.volume / 100);
     this.resource = resource;
+    this.applyGain();
     this.seekOffset = seek;
     this.audio.play(resource);
     this.changed();
@@ -366,6 +411,8 @@ export class Player extends EventEmitter {
   }
 
   destroy() {
+    if (this.fadeTimer) clearInterval(this.fadeTimer);
+    if (this.duckTimer) clearTimeout(this.duckTimer);
     this.killStream();
   }
 }

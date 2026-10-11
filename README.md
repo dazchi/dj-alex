@@ -112,6 +112,26 @@ If the bot isn't in a voice channel when someone queues music, it joins on its o
 
 `/play` and `/join` move the bot into *your* voice channel if it isn't connected yet.
 
+### Control API (for other bots)
+
+Set `CONTROL_TOKEN` (for example `openssl rand -hex 32`) to let another program, such as a voice assistant bot, control
+the player. Every request needs the header `Authorization: Bearer <CONTROL_TOKEN>`; without the token set, these routes don't exist.
+
+| Request | Body (JSON) |
+|---|---|
+| `GET /api/control/status` | – (now playing, the next 10 songs, volume, repeat, voice channel and listeners) |
+| `GET /api/control/search?q=…&limit=8` | – (songs whose title, artist or album match) |
+| `POST /api/control/play` | `query` (library search or `http(s)://` URL; leave it out for a random song from the library), `position` (`end` / `next` / `now`) |
+| `POST /api/control/album` | `name`, `position` |
+| `POST /api/control/pause` `resume` `skip` `previous` `stop` `shuffle` `clear` `leave` | – |
+| `POST /api/control/volume` | `volume` (0–100) |
+| `POST /api/control/repeat` | `mode` (`off` / `one` / `all`) |
+| `POST /api/control/join` | `channelId` |
+| `POST /api/control/duck` | `level` (music volume in % while ducked, default 30; 100 = back to normal), `seconds` (back up after this long unless renewed, default 30). Fades only; not shown in the activity feed |
+
+Any POST may also send `actor`, the name shown in the activity feed (for example `Alex (for Darren)`), and `channelId`,
+the voice channel to join if the bot isn't in one yet. Replies are `{"ok": true, ...status}` or `{"ok": false, "error": "..."}`.
+
 ---
 
 ## Configuration
@@ -130,6 +150,7 @@ See [.env.example](.env.example) for every option. The main ones:
 | `HTTP_PORT` | `3000` | Web UI / API port |
 | `AUTO_LEAVE_MINUTES` | `5` | Leave the voice channel once it has been empty this long |
 | `MAX_DOWNLOAD_MB` | `200` | Size limit for URL downloads |
+| `CONTROL_TOKEN` | – | Turns on the control API for other bots (see above) |
 
 ## Security note
 
@@ -150,6 +171,7 @@ server/src/
   bot.ts          Discord client, voice connection, auto-join/leave
   commands.ts     slash command definitions + handlers
   auth.ts         Discord OAuth2 login + sessions
+  control.ts      token-protected control API for other bots
   web.ts          REST API, Socket.IO, static frontend
   types.ts        types shared with the web UI
 web/src/

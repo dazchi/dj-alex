@@ -38,6 +38,8 @@ export const config = {
   /** Only members of the bot's server may log in to the web UI. */
   requireGuildMember: env('REQUIRE_GUILD_MEMBER', 'true') !== 'false',
   sessionDays: num('SESSION_DAYS', 30),
+  /** Shared secret for the control API (/api/control/*). The API is off when empty. */
+  controlToken: env('CONTROL_TOKEN'),
   discordApi: env('DISCORD_API_URL', 'https://discord.com/api/v10'),
 
   ffmpegPath: env('FFMPEG_PATH', 'ffmpeg'),
