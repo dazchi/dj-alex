@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Controller } from './controller.js';
-import type { Actor, InsertPosition, QueueItem, RepeatMode, Track } from './types.js';
+import type { Actor, InsertPosition, QueueItem, RepeatMode, SongSort, Track } from './types.js';
 import { errorMessage } from './util.js';
 
 const POSITIONS: InsertPosition[] = ['end', 'next', 'now'];
@@ -10,6 +10,7 @@ const UP_NEXT = 10;
 const DEFAULT_DUCK_LEVEL = 30;
 const MAX_DUCK_SECONDS = 120;
 const MAX_SEARCH_RESULTS = 20;
+const MAX_LATEST = 20;
 
 interface ControlBody {
   /** Shown in the activity feed and on queued songs, e.g. "Alex (for Darren)". */
@@ -17,6 +18,8 @@ interface ControlBody {
   /** Voice channel to join if the bot is not in one yet (the requester's channel). */
   channelId?: string;
   query?: string;
+  /** play: queue the N most recently added songs, newest first (instead of query). */
+  latest?: number;
   name?: string;
   position?: string;
   volume?: number;
@@ -31,6 +34,9 @@ type Action = (body: ControlBody, actor: Actor) => Promise<unknown> | unknown;
 
 /** Title, artist and album exactly as tagged in the library. */
 const trackInfo = (t: Track) => ({ title: t.title, artist: t.artist, album: t.album });
+
+/** trackInfo plus the day the song was added to the library (YYYY-MM-DD), when known. */
+const songInfo = (t: Track) => ({ ...trackInfo(t), ...(t.addedAt ? { added: new Date(t.addedAt).toISOString().slice(0, 10) } : {}) });
 
 /**
  * Lets another program (such as a voice assistant bot) control playback with a shared secret:
@@ -90,6 +96,14 @@ export function registerControl(app: FastifyInstance, controller: Controller, to
     play: async (body, actor) => {
       const query = typeof body.query === 'string' ? body.query.trim() : '';
       const where = position(body.position);
+      if (body.latest !== undefined) {
+        const count = Math.min(MAX_LATEST, Math.max(1, Math.floor(Number(body.latest)) || 1));
+        const tracks = lib.search('', { sort: 'recent', limit: count }).items;
+        if (tracks.length === 0) throw new Error('The music library is empty');
+        await joinRequester(body, actor);
+        const [item] = await controller.addTracks(actor, tracks.map((t) => t.id), where);
+        return { track: trackInfo(tracks[0]), placement: placement(item), picked: 'latest', songs: tracks.map(songInfo) };
+      }
       if (!query) {
         // No song named ("play some music"): a random song from the library, other than the one playing.
         const total = lib.search('', { limit: 1 }).total;
@@ -167,11 +181,13 @@ export function registerControl(app: FastifyInstance, controller: Controller, to
 
   app.get('/api/control/status', async (req, reply) => (authorized(req) ? { ok: true, ...status() } : deny(reply)));
 
-  app.get<{ Querystring: { q?: string; limit?: string } }>('/api/control/search', async (req, reply) => {
+  app.get<{ Querystring: { q?: string; limit?: string; sort?: string } }>('/api/control/search', async (req, reply) => {
     if (!authorized(req)) return deny(reply);
     const limit = Math.min(MAX_SEARCH_RESULTS, Math.max(1, Number(req.query.limit) || 8));
-    const page = lib.search(req.query.q ?? '', { limit });
-    return { ok: true, total: page.total, songs: page.items.map((t) => ({ title: t.title, artist: t.artist, album: t.album })) };
+    // sort=recent: newest additions first (with no q, the latest songs in the library).
+    const sort = req.query.sort === 'recent' ? ('recent' as SongSort) : undefined;
+    const page = lib.search(req.query.q ?? '', { limit, sort });
+    return { ok: true, total: page.total, songs: page.items.map(songInfo) };
   });
 
   app.post<{ Params: { action: string }; Body: ControlBody | undefined }>('/api/control/:action', async (req, reply) => {

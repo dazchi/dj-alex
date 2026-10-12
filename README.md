@@ -120,8 +120,8 @@ the player. Every request needs the header `Authorization: Bearer <CONTROL_TOKEN
 | Request | Body (JSON) |
 |---|---|
 | `GET /api/control/status` | – (now playing, the next 10 songs, volume, repeat, voice channel and listeners) |
-| `GET /api/control/search?q=…&limit=8` | – (songs whose title, artist or album match) |
-| `POST /api/control/play` | `query` (library search or `http(s)://` URL; leave it out for a random song from the library), `position` (`end` / `next` / `now`) |
+| `GET /api/control/search?q=…&limit=8&sort=recent` | – (songs whose title, artist or album match, each with the day it was added; `sort=recent` lists the newest additions first, and with no `q` the latest songs in the library) |
+| `POST /api/control/play` | `query` (library search or `http(s)://` URL; leave it out for a random song from the library), or `latest` (a number: the N most recently added songs, newest first), `position` (`end` / `next` / `now`) |
 | `POST /api/control/album` | `name`, `position` |
 | `POST /api/control/pause` `resume` `skip` `previous` `stop` `shuffle` `clear` `leave` | – |
 | `POST /api/control/volume` | `volume` (0–100) |

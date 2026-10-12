@@ -10,7 +10,7 @@ import type { Actor, InsertPosition, QueueItem, Track } from '../src/types.js';
 const TOKEN = 'secret-token';
 const auth = { authorization: `Bearer ${TOKEN}` };
 
-const song = (id: string, title: string, artist: string, album = 'Album'): Track => ({
+const song = (id: string, title: string, artist: string, album = 'Album', addedAt?: number): Track => ({
   id,
   source: 'local',
   title,
@@ -18,9 +18,13 @@ const song = (id: string, title: string, artist: string, album = 'Album'): Track
   album,
   duration: 200,
   hasCover: false,
+  ...(addedAt ? { addedAt } : {}),
 });
 
-const SONGS = [song('t1', '晴天', '周杰倫', '葉惠美'), song('t2', '七里香', '周杰倫', '七里香')];
+const SONGS = [
+  song('t1', '晴天', '周杰倫', '葉惠美', Date.UTC(2026, 8, 1)),
+  song('t2', '七里香', '周杰倫', '七里香', Date.UTC(2026, 9, 10)),
+];
 
 /** Just enough of Controller for the control API, recording what was called. */
 function fakeController() {
@@ -38,8 +42,9 @@ function fakeController() {
       findBest: (q: string) => SONGS.find((t) => `${t.title} ${t.artist}`.includes(q)) ?? null,
       albums: () => [{ key: 'k7', name: '七里香', artist: '周杰倫', trackCount: 1, duration: 200, coverTrackId: null }],
       albumTracks: () => [SONGS[1]],
-      search: (q: string, { limit, offset = 0 }: { limit: number; offset?: number }) => {
-        const items = SONGS.filter((t) => `${t.title} ${t.artist}`.includes(q));
+      search: (q: string, { limit, offset = 0, sort }: { limit: number; offset?: number; sort?: string }) => {
+        let items = SONGS.filter((t) => `${t.title} ${t.artist}`.includes(q));
+        if (sort === 'recent') items = [...items].sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0));
         return { items: items.slice(offset, offset + limit), total: items.length, offset };
       },
     },
@@ -208,7 +213,7 @@ test('the control API works without a web login, the rest of /api does not', asy
 test('search lists matching songs', async () => {
   const { app } = await setup();
   const res = await app.inject({ method: 'GET', url: `/api/control/search?q=${encodeURIComponent('周杰倫')}&limit=1`, headers: auth });
-  assert.deepEqual(res.json(), { ok: true, total: 2, songs: [{ title: '晴天', artist: '周杰倫', album: '葉惠美' }] });
+  assert.deepEqual(res.json(), { ok: true, total: 2, songs: [{ title: '晴天', artist: '周杰倫', album: '葉惠美', added: '2026-09-01' }] });
   assert.equal((await app.inject({ method: 'GET', url: '/api/control/search?q=x' })).statusCode, 401);
 });
 
@@ -224,4 +229,29 @@ test('play without a song name picks a random library song other than the curren
     first.track = next.track;
   }
   assert.equal(calls.filter((c) => c.action === 'addTracks').length, 11);
+});
+
+test('the latest songs can be listed and played, newest first', async () => {
+  const { app, calls } = await setup();
+  const listed = (await app.inject({ method: 'GET', url: '/api/control/search?sort=recent&limit=2', headers: auth })).json();
+  assert.deepEqual(
+    listed.songs.map((s: { title: string; added: string }) => [s.title, s.added]),
+    [
+      ['七里香', '2026-10-10'],
+      ['晴天', '2026-09-01'],
+    ],
+  );
+  const play = (payload: object) => app.inject({ method: 'POST', url: '/api/control/play', headers: auth, payload });
+  const one = (await play({ latest: 1, position: 'now' })).json();
+  assert.equal(one.picked, 'latest');
+  assert.deepEqual(one.track, { title: '七里香', artist: '周杰倫', album: '七里香' });
+  const two = (await play({ latest: 2 })).json();
+  assert.equal(two.songs.length, 2);
+  assert.deepEqual(
+    calls.filter((c) => c.action === 'addTracks').map((c) => c.args),
+    [
+      [['t2'], 'now'],
+      [['t2', 't1'], 'end'],
+    ],
+  );
 });
